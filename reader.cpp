@@ -17,6 +17,9 @@
 #include <float.h>
 #include <stdlib.h>
 #include <stapl/runtime/runtime.hpp>
+#include "benchmarks/algorithms/utilities.hpp"
+#include "benchmarks/algorithms/timer.hpp"
+#include <algorithm>
 
 #if defined(_OPENMP)
 #include <omp.h>
@@ -32,10 +35,11 @@ using namespace std;
 //using namespace stapl;
 
 typedef std::numeric_limits< double > dbl;
+const float EPSILON = 0.00000000001f;
 
 double *timeBLS, *fluxBLS, *fluxErrBLS;
 
- int readTable(std::string fileName, long int fileSize)
+ int readTable(std::string fileName)
 {
     // read a table and explicitly read selected columns. To read instead all the
     // data on construction, set the last argument of the FITS constructor
@@ -45,40 +49,94 @@ double *timeBLS, *fluxBLS, *fluxErrBLS;
     hdus[0] = "PRIMARY";
     hdus[1] = "LIGHTCURVE";
     hdus[2] = "APERTURE";
-    std::auto_ptr<FITS> pInfile(new FITS(fileName,Read,hdus,false));
+    std::auto_ptr<FITS> pInfile(new FITS(fileName,Read,hdus,true));
     ExtHDU& table = pInfile->extension(hdus[1]);
+    int fileSize = table.axis(1);
+    cout << "read filesize: " << fileSize << endl;
     std::valarray <double> time, flux, flux_err;
     table.column("TIME").read( time, 1,fileSize );
     table.column("SAP_FLUX").read( flux, 1,fileSize );
     table.column("SAP_FLUX_ERR").read( flux_err, 1,fileSize );
-    cout << "TIME \t FLUX" << endl;
+
     cout.precision(dbl::max_digits10);
 
     int toBeDeleted=0;
     for(size_t i=0; i<time.size(); i++){
-        if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])  ){
+
+        if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i]) ){
             toBeDeleted++;
         }
     }
+    cout << "cleaning NaNs: " << toBeDeleted << endl;
 
     int newfileSize = time.size() - toBeDeleted;
-    cout << "CLEANED THIS MANY ROWS FROM EACH INPUT ARRAY SEPERATELY: " <<  fileSize - newfileSize << endl;
-
-    timeBLS= new double[newfileSize];
-    fluxBLS= new double[newfileSize];
-    fluxErrBLS= new double[newfileSize];
-    int ctr=0;
+    vector<double> tempflux, temperr;
     for(size_t i=0; i< (size_t) time.size(); i++){
-        if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])  ) continue;
+        if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])) continue;
+        tempflux.push_back(flux[i]);
+        temperr.push_back(flux_err[i]);
+    }
+
+    /*
+     * cout << "before normalizing: TIME \t FLUX \t FLUXERR" << endl;
+    for(size_t i=0; i< (size_t) newfileSize; i++){
+        cout << timeBLS[i] << '\t' << tempflux[i] << '\t' <<  temperr[i] << '\n';
+    }
+     */
+
+    // for flux
+    double min_err, max_err, min_fl, max_fl;
+    min_fl =  *std::min_element(tempflux.begin(),tempflux.end());
+    max_fl =  *std::max_element(tempflux.begin(),tempflux.end());
+    min_err =  *std::min_element(temperr.begin(),temperr.end());
+    max_err =  *std::max_element(temperr.begin(),temperr.end());
+    std::vector<double> normFlux(newfileSize), normFluxErr(newfileSize);
+    std::transform(tempflux.begin(), tempflux.end(), normFlux.begin(),
+                   [min_fl, max_fl](double x) { return (x - min_fl) / (max_fl-min_fl); });
+
+    std::transform(temperr.begin(), temperr.end(), normFluxErr.begin(),
+                   [min_err, max_err](double x) { return (x - min_err) / (max_err-min_err); });
+
+    // print after norm
+    /*
+     cout << "AFTER NORM: FLUX \t FLUXERR" << endl;
+    for(size_t i=0; i< (size_t) newfileSize; i++){
+        cout << std::fixed << normFlux[i] << '\t' <<  normFluxErr[i] << '\n';
+    }
+     */
+
+    int numzeros=0;
+    // clean 0.0s so that power does not crash the program with infs
+     for(size_t i=0; i< (size_t) newfileSize; i++){
+        if(((normFlux[i]<EPSILON) && (normFlux[i]>= -EPSILON)) || ((normFluxErr[i]<EPSILON) && (normFluxErr[i]>= -EPSILON)) ){
+            numzeros++;
+        }
+    }
+     cout << "cleaning also 0.0s: " << numzeros << endl;
+     newfileSize -= numzeros;
+     timeBLS= new double[newfileSize];
+     fluxBLS= new double[newfileSize];
+     fluxErrBLS= new double[newfileSize];
+     int ctr=0;
+    for(size_t i=0; i< (size_t) newfileSize+numzeros; i++){
+        if(((normFlux[i]<EPSILON) && (normFlux[i]>= -EPSILON)) || ((normFluxErr[i]<EPSILON) && (normFluxErr[i]>= -EPSILON)) ) continue;
+        fluxBLS[ctr] = normFlux[i];
+        fluxErrBLS[ctr] = normFluxErr[i];
         timeBLS[ctr] = time[i];
-        fluxBLS[ctr] = flux[i];
-        fluxErrBLS[ctr] = flux_err[i];
         ctr++;
     }
+
+    /*
+     cout << "TIME \t FLUX \t FLUXERR" << endl;
+    for(size_t i=0; i< (size_t) newfileSize; i++){
+        cout << std::fixed<< timeBLS[i] << '\t' << fluxBLS[i] << '\t' <<  fluxErrBLS[i] << '\n';
+    }
+     */
+
     return newfileSize;
 }
 
-
+/*
 void compute_objective(
     double y_in,
     double y_out,
@@ -292,16 +350,112 @@ int run_bls (
 
     return 0;
 }
+*/
+
+double weightSum(double* fluxErr, int size){
+    double temp=0.0;
+    for(size_t i=0; i< (size_t) size; i++){
+        temp += pow((double)fluxErr[i],-2.0);
+    }
+    return pow(temp,-1.0);
+}
+
+double rValue(int i1, int i2, vector<double> listWeight){
+    double temp=0.0;
+    for(size_t i=i1; i< (size_t) i2; i++){
+        temp += listWeight[i];
+    }
+    return temp;
+}
 
 
+double sValue(int i1, int i2, vector<double> listWeight, double* flux){
+    double temp=0.0;
+    for(size_t i=i1; i< (size_t) i2; i++){
+        temp += listWeight[i]*flux[i];
+    }
+    return temp;
+}
+
+double dValue(vector<double> listWeight, double* flux ,double r, double s){
+    double temp=0.0;
+    for(size_t i=0; i<listWeight.size(); i++){
+        temp += listWeight[i]* pow(flux[i],2.0);
+    }
+    return (double) (temp - (pow(s,2.0))) / (double) (r*( (1-r)));
+}
+
+void myBls(double* flux, double* fluxErr, double* time, int size){
+    vector<double> listWeight;
+    double sumW = weightSum(fluxErr, size);
+    double w_i;
+
+    for(size_t i1=0; i1<  (size_t) size; i1++){
+        w_i = sumW*(pow(fluxErr[i1],-2.0));
+        listWeight.push_back(w_i);
+    }
+
+    double r,s, d;
+
+    double d_min= DBL_MAX;
+    int min_i1=-1; int min_i2=-1;
+    for(size_t i1=0; i1< (size_t) size; i1++){
+        for(size_t i2=i1+1; i2< (size_t)size; i2++){
+            r = rValue(i1,i2,listWeight);
+            s = sValue(i1,i2,listWeight,flux);
+            d = dValue(listWeight,flux,r,s);
+            //cout << "testing i1: " << i1 << "\ti2: " << i2 << "\td: " << d  << '\n' ;
+            if(d < d_min){
+                d_min = d;
+                min_i1=i1;
+                min_i2=i2;
+            }
+        }
+    }
+   if(min_i1!=-1 && min_i2!=-1) {
+       cout << "resulting i1: " << min_i1 << "\ti2: " << min_i2 << "\td: " << d_min  << '\n' ;
+       cout << "Period: " << std::fixed<< time[min_i2] - time[min_i1] << '\n' ;
+   }
+   else cout << "could not find any pairs. latest d: " << d << endl;
+
+}
+ stapl::exit_code stapl_main(int argc, char **argv)
+{
+    FITS::setVerboseMode(true);
+    std::string fileName = argv[1];
+    try
+    {
+
+        int size = readTable(fileName);
+
+        std::cout << "successfully readImage() \n";
+
+        stapl::counter<stapl::default_timer> t;
+        t.reset();
+        t.start();
+        myBls(fluxBLS, fluxErrBLS, timeBLS, size);
+        double time = t.stop();
+        std::cout << "finished BLS with time : " << time << "\n";
+    }
+
+    catch (FitsException&)
+    // will catch all exceptions thrown by CCfits, including errors
+    // found by cfitsio (status != 0)
+    {
+        std::cerr << " Fits Exception Thrown by test function \n";
+    }
+
+    return EXIT_SUCCESS;
+}
+ /*
 stapl::exit_code stapl_main(int argc, char **argv)
 {
     FITS::setVerboseMode(true);
     try
     {
         int size=50250;
-        int n_periods=16;
-        int n_durations=16;
+        int n_periods=50000;
+        int n_durations=5000;
         size = size - readTable("kplr008478994-2012004120508_slc.fits", size);
 
         std::cerr << " readImage() \n";
@@ -330,19 +484,30 @@ stapl::exit_code stapl_main(int argc, char **argv)
 
 
         for(size_t i=0; i< (size_t) n_periods; i++){
-            periods[i] = (rand() % 4960) + (50);
+            periods[i] = (rand() % 45000) + (5000);
         }
         for(size_t i=0; i< (size_t) n_durations; i++){
-            durations[i] = (rand() % 30) + (1);
+            durations[i] = (rand() % 5000) + (1);
         }
+        sort(periods, periods + n_periods);
+        sort(durations, durations + n_durations);
+
+         stapl::counter< stapl::default_timer> t;
+        t.reset();
+        t.start();
+
         run_bls (size,timeBLS,fluxBLS,fluxErrBLS, n_periods, periods, n_durations,durations,1,1,
                  best_objective,  best_depth,  best_depth_err,  best_duration, best_phase, best_depth_snr,best_log_like);
-        cout << "Results \n";
+
+        double read_time = t.stop();
+
+        cout << "Results: " << std::fixed << read_time<< '\n';
 
         for(size_t i=0; i< (size_t) n_periods; i++){
+            cout << "Curr Period: " << (int) periods[i] << endl;
             std::cout << std::fixed  << best_log_like[i] << '\t' ;
-            std::cout << std::fixed  << best_duration[i] << '\t';
-            std::cout << std::fixed  << best_phase[i] << '\n' ;
+            std::cout << std::fixed  << (int) best_duration[i] << '\t';
+            std::cout << std::fixed  << (int) best_phase[i] << '\n' ;
         }
 
     }
@@ -357,3 +522,4 @@ stapl::exit_code stapl_main(int argc, char **argv)
     return EXIT_SUCCESS;
 
 }
+*/
