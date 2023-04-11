@@ -135,21 +135,34 @@ using namespace std;
 }
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-            vector<double> time, double helper_d, int size){
-    double r,s, d;
-    int min_i1=-1, min_i2=-1;
-    double d_min= DBL_MAX;
-    cout.precision(dbl::max_digits10);
+           vector<double> time, double helper_d, int size){
+  double r,s, d;
+  int min_i1=-1, min_i2=-1;
+  double d_min= DBL_MAX;
+  double ex_time = DBL_MIN;
+
+  //double mem_time = 0.0;
+  //double global_mem_time = 0.0;
+    double wtime = omp_get_wtime();
+    double reg1,reg2;
 
     for(size_t i1=0; i1< (size_t) size; i1++){
-        double reg1= scannedWeights[i1];
-        double reg2= scannedWeightedFlux[i1];
+        //double st_mem_time = omp_get_wtime();
+        reg1= scannedWeights[i1];
+        reg2= scannedWeightedFlux[i1];
+        //double after_mem_time = omp_get_wtime();
+        //mem_time+= after_mem_time - st_mem_time;
         for(size_t i2=(i1+1); i2< (size_t) size; i2++){
+            //st_mem_time = omp_get_wtime();
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
+            //r = reg1+ 2.0*reg2 - reg1;
+            //s = 4.0*reg2 - reg2;
+            //after_mem_time = omp_get_wtime();
+            //mem_time+= after_mem_time - st_mem_time;
 
-            d = (helper_d - ( (pow(s, 2.0)) / ( 1.0 * r *  (1.0-r) )));
-            d = -0.002*d + 0.032;
+            d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
+            //double redctime = omp_get_wtime();
             if(d < d_min){
                 d_min = d;
                 min_i1=i1;
@@ -157,12 +170,18 @@ void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
             }
         }
     }
-    if(min_i1!=-1 && min_i2!=-1) {
-           cout << "resulting i1: " << min_i1 << "\ti2: " << min_i2 << "\td: " << d_min   << " period: " << std::fixed << time[min_i2] - time[min_i1] << '\n' ;
-    }
-    else cout << "could not find any pairs. latest d: " << d << endl;
+    wtime = omp_get_wtime() - wtime;
 
+  if(min_i1!=-1 && min_i2!=-1) {
+      double period = time[min_i2] - time[min_i1] ;
+      double corrected_p = -0.002*period + 0.032;
+    cout << std::fixed << "results\n i1:\t" << min_i1 << "\ti2:\t" << min_i2 << "\td:\t" << d_min  << "\ttime:\t" << wtime << "\tcorrected period:\t"  << corrected_p << '\n' ;
+    //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
+  }
+  else cout << "could not find any pairs. latest d: " << d << endl;
 }
+
+
 int main(int argc, char **argv)
 {
     FITS::setVerboseMode(true);
@@ -211,13 +230,9 @@ int main(int argc, char **argv)
     for(size_t i=1; i< (size_t) view_weight.size(); i++){
         v_scanned_weights.push_back(view_weight[i] + v_scanned_weights[i-1]);
     }
-
-    double start_time = omp_get_wtime();
-    // do once. create time, flux and flux error.
     myBls(v_scanned_weights, v_scanned_weightedFlux, view_time,  helper_d,  size);
-    double end_time = omp_get_wtime();
 
-    std::cout <<  "-finished BLS with time : " << end_time-start_time << "\n";
+    //std::cout <<  "-finished BLS with time : " << end_time-start_time << "\n";
     //double max_time=0.0;
     //MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     //stapl::do_once(

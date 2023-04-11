@@ -135,65 +135,61 @@ using namespace std;
 }
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-            vector<double> time, double helper_d, int size){
-    double r,s, d;
-    //int min_i1=-1, min_i2=-1;
-    //double d_min= DBL_MAX;
-    double ex_time = DBL_MIN;
-    cout.precision(dbl::max_digits10);
+           vector<double> time, double helper_d, int size){
+  double r,s, d;
+  int min_i1=-1, min_i2=-1;
+  double d_min= DBL_MAX;
+  double ex_time = DBL_MIN;
 
-    struct Compare { double val; size_t index1; size_t index2; };
-    struct Compare min;
-    min.val = DBL_MAX;
-    min.index1 = -1;
-    min.index2 = -1;
-    #pragma omp declare reduction(minimum : struct Compare : omp_out = omp_in.val < omp_out.val ? omp_in : omp_out )  initializer(omp_priv = {DBL_MAX, 0, 0})
+  //double mem_time = 0.0;
+  //double global_mem_time = 0.0;
+#pragma omp parallel  shared(scannedWeights, scannedWeightedFlux) private(r,s,d)  reduction(min:d_min) reduction(max:ex_time )
+  {
+    int num_loc = omp_get_num_threads();
+    int loc_id = omp_get_thread_num();
+    double wtime = omp_get_wtime();
+    double reg1,reg2;
+#pragma omp for schedule(static,num_loc)
+    for(size_t i1=0; i1< (size_t) size; i1++){
+        //double st_mem_time = omp_get_wtime();
+        reg1= scannedWeights[i1];
+        reg2= scannedWeightedFlux[i1];
+        //double after_mem_time = omp_get_wtime();
+        //mem_time+= after_mem_time - st_mem_time;
+        for(size_t i2=(i1+1); i2< (size_t) size; i2++){
+            //st_mem_time = omp_get_wtime();
+            r = scannedWeights[i2] - reg1;
+            s = scannedWeightedFlux[i2] - reg2;
+            //r = reg1+ 2.0*reg2 - reg1;
+            //s = 4.0*reg2 - reg2;
+            //after_mem_time = omp_get_wtime();
+            //mem_time+= after_mem_time - st_mem_time;
 
-
-    cout << "starting with size*(size-1)/2: " << size*(size-1)/2 << " and size: " << size << endl << flush;
-    #pragma omp parallel  shared(scannedWeights, scannedWeightedFlux)  reduction(minimum:min)
-    {
-        int num_loc = omp_get_num_threads();
-        int loc_id = omp_get_thread_num();
-
-        double wtime = omp_get_wtime();
-        #pragma omp for schedule(static,8)
-            for(size_t k=0; k< size*(size-1)/2; k++){
-                size_t i1 = size - 2 - floor(sqrt(-8*k + 4*size*(size-1)-7)/2 - 0.5);
-                size_t i2 = k + i1 + 1 - size*(size-1)/2 + (size-i1)*((size-i1)-1)/2;
-                   // i = N - 2 - floor(sqrt(-8*index + 4*N*(N-1)-7)/2 - 0.5);
-                   // j = index + i + 1 - N*(N-1)/2 + (N-i)*((N-i)-1)/2;
-                if (i1 < 0 || i2< 0 || i1 >= size || i2 >= size) cout << "index error" << endl << flush;
-                //cout << loc_id << " processing: " << i1 << "," << i2 << endl << flush;
-                r = scannedWeights[i2] - scannedWeights[i1];
-                s = scannedWeightedFlux[i2] - scannedWeightedFlux[i1];
-
-                d = (helper_d - ( (pow(s, 2.0)) / ( 1.0 * r *  (1.0-r) )));
-                d = -0.002*d + 0.032;
-                if(d < min.val){
-                    min.val = d;
-                    min.index1=i1;
-                    min.index2=i2;
-                    //cout << loc_id << " setting min d: " << min.val << endl << flush;
-                }
+            d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
+            //double redctime = omp_get_wtime();
+            if(d < d_min){
+                d_min = d;
+                min_i1=i1;
+                min_i2=i2;
             }
-
-        wtime = omp_get_wtime() - wtime;
-        if (wtime > ex_time ) ex_time=wtime;
-        /*
-        if(min_i1!=-1 && min_i2!=-1) {
-           cout << loc_id << "'s resulting i1: " << min_i1 << "\ti2: " << min_i2 << "\td: " << d_min  << "with time: " << wtime << '\n' ;
-           cout << loc_id << "'s Period: " << std::fixed << time[min_i2] - time[min_i1] << '\n' ;
         }
-        else cout << "could not find any pairs. latest d: " << d << endl;
-         */
     }
-    if(min.index1!=-1 && min.index2!=-1) {
-           cout << std::fixed << "resulting i1: " << min.index1 << "\ti2: " << min.index2 << "\td: " << min.val  << " time: " << ex_time << " period: "  << time[min.index2] - time[min.index1] << '\n' ;
+    wtime = omp_get_wtime() - wtime;
+    // reduce global times
+    if (wtime > ex_time ){
+        ex_time=wtime; //global_mem_time=mem_time;
     }
-    else cout << "could not find any pairs. latest d: " << d << endl;
-
+  }
+  if(min_i1!=-1 && min_i2!=-1) {
+      double period = time[min_i2] - time[min_i1] ;
+      double corrected_p = -0.002*period + 0.032;
+    cout << std::fixed << "results\n i1:\t" << min_i1 << "\ti2:\t" << min_i2 << "\td:\t" << d_min  << "\ttime:\t" << ex_time << "\tcorrected period:\t"  << corrected_p << '\n' ;
+    //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
+  }
+  else cout << "could not find any pairs. latest d: " << d << endl;
 }
+
+
 int main(int argc, char **argv)
 {
     FITS::setVerboseMode(true);
