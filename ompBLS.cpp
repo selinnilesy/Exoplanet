@@ -135,58 +135,60 @@ using namespace std;
 }
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-           vector<double> time, double helper_d, int size){
+           vector<double> time, double helper_d, long long size){
+
   double r,s, d;
   int min_i1=-1, min_i2=-1;
   double d_min= DBL_MAX;
   double ex_time = DBL_MIN;
+  std::setprecision(15);
 
-  //double mem_time = 0.0;
-  //double global_mem_time = 0.0;
-#pragma omp parallel  shared(scannedWeights, scannedWeightedFlux) private(r,s,d)  reduction(min:d_min) reduction(max:ex_time )
+  typedef struct {
+    double d;
+    long long min_i1;
+    long long min_i2;
+  } solution_t;
+
+solution_t solution = { DBL_MAX, -1,-1 };
+#pragma omp declare reduction(get_mind : solution_t :\
+    omp_out = omp_out.d < omp_in.d ? omp_out : omp_in)\
+    initializer (omp_priv=(omp_orig))
+
+
+double wtime = omp_get_wtime();
+  #pragma omp parallel  shared(scannedWeights, scannedWeightedFlux, size, p, grid) private(r,s,d) reduction(get_mind:solution )
   {
     int num_loc = omp_get_num_threads();
     int loc_id = omp_get_thread_num();
-    double wtime = omp_get_wtime();
+    int start = size - sqrt(p - loc_id) * grid;
+    int end = size - sqrt(p - loc_id -1) * grid;
+
     double reg1,reg2;
-#pragma omp for schedule(static,num_loc)
-    for(size_t i1=0; i1< (size_t) size; i1++){
-        //double st_mem_time = omp_get_wtime();
+    for(long long i1=start; i1< end; i1++){
         reg1= scannedWeights[i1];
         reg2= scannedWeightedFlux[i1];
-        //double after_mem_time = omp_get_wtime();
-        //mem_time+= after_mem_time - st_mem_time;
-        for(size_t i2=(i1+1); i2< (size_t) size; i2++){
-            //st_mem_time = omp_get_wtime();
+        for(long long i2=(i1+1); i2< (long long) size; i2++){
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
-            //r = reg1+ 2.0*reg2 - reg1;
-            //s = 4.0*reg2 - reg2;
-            //after_mem_time = omp_get_wtime();
-            //mem_time+= after_mem_time - st_mem_time;
-
             d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
-            //double redctime = omp_get_wtime();
-            if(d < d_min){
-                d_min = d;
-                min_i1=i1;
-                min_i2=i2;
-            }
+           solution_t temp_solution = { d, i1,i2 };
+           if(temp_solution.d < solution.d){
+                    solution.d = temp_solution.d;
+                    solution.min_i1=temp_solution.min_i1;
+                    solution.min_i2=temp_solution.min_i2;
+           }
         }
     }
-    wtime = omp_get_wtime() - wtime;
-    // reduce global times
-    if (wtime > ex_time ){
-        ex_time=wtime; //global_mem_time=mem_time;
-    }
   }
-  if(min_i1!=-1 && min_i2!=-1) {
-      double period = time[min_i2] - time[min_i1] ;
-      double corrected_p = -0.002*period + 0.032;
-    cout << std::fixed << "results\n i1:\t" << min_i1 << "\ti2:\t" << min_i2 << "\td:\t" << d_min  << "\ttime:\t" << ex_time << "\tcorrected period:\t"  << corrected_p << '\n' ;
+  ex_time = omp_get_wtime() - wtime;
+
+  if(solution.min_i1!=-1 && solution.min_i2!=-1) {
+      double corrected_p =  -0.002*(time[solution.min_i2] - time[solution.min_i1]) + 0.032;
+    cout << std::fixed << "resulting i1: " << solution.min_i1 << "\ti2: " << solution.min_i2 << "\td: " << solution.d  << " time: " << ex_time << " period: "  <<  corrected_p << '\n' ;
     //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
   }
   else cout << "could not find any pairs. latest d: " << d << endl;
+
 }
 
 
@@ -223,7 +225,7 @@ int main(int argc, char **argv)
 
     vector<double>  view_d;
     transform(view_squaredfluxerr.begin(), view_squaredfluxerr.end(), view_weight.begin(), std::back_inserter(view_d),
-                   [](double sf, double w) {  cout.precision(dbl::max_digits10); return w * pow(sf,2.0); });
+                   [](double sf, double w) {  cout.precision(dbl::max_digits10); return w * (1.0/sf); });
     double helper_d = accumulate(view_d.begin(), view_d.end(), 0);
 
     // prefix sum weighted flux

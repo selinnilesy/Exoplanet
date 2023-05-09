@@ -96,7 +96,7 @@ public:
         cout.precision(dbl::max_digits10);
         double flux = val1;
         double weight = val2;
-        output = weight * pow(flux,2.0);
+        output = weight * (1.0 / flux);
     }
 };
 

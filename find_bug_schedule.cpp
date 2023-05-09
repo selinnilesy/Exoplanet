@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <numeric>
+#include <papi.h>
 
 #if defined(_OPENMP)
 #include <omp.h>
@@ -41,20 +42,10 @@ using namespace std;
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
            vector<double> time, double helper_d, long long size){
-
   double r,s, d;
   int min_i1=-1, min_i2=-1;
   double d_min= DBL_MAX;
   double ex_time = DBL_MIN;
-
-  //double mem_time = 0.0;
-  //double global_mem_time = 0.0;
-  std::setprecision(15);
-
-
-  int p = atoi(getenv("OMP_NUM_THREADS"));
-  int grid= size/sqrt(p);
-  //cout << "found " << grid << " offset in the program." << endl;
 
   typedef struct {
     double d;
@@ -67,32 +58,42 @@ solution_t solution = { DBL_MAX, -1,-1 };
     omp_out = omp_out.d < omp_in.d ? omp_out : omp_in)\
     initializer (omp_priv=(omp_orig))
 
+  //double mem_time = 0.0;
+  //double global_mem_time = 0.0;
+  std::setprecision(15);
 
-double wtime = omp_get_wtime();
-  #pragma omp parallel  shared(scannedWeights, scannedWeightedFlux, size, p, grid) private(r,s,d) reduction(get_mind:solution )
+    int retval, EventSet = PAPI_NULL;
+long long values [1];
+
+/* Initialize the PAPI library */
+retval = PAPI_library_init(PAPI_VER_CURRENT);
+if(retval != PAPI_VER_CURRENT)
+{   fprintf (stderr, "PAPI library init error!\n");
+    exit();
+}
+/* Create the Event Set */
+if (PAPI_create_eventset(&EventSet) != PAPI_OK)   handle_error(1);
+/* Add Total Instructions Executed to our EventSet */
+if (PAPI_add_event(EventSet, PAPI_L1_DCM) != PAPI_OK) handle_error (1);
+/* Start counting */
+if (PAPI_start(EventSet) != PAPI_OK) handle_error(1);
+
+  double wtime = omp_get_wtime();
+  #pragma omp parallel  shared(scannedWeights, scannedWeightedFlux) private(r,s,d) reduction(get_mind:solution )
   {
     int num_loc = omp_get_num_threads();
     int loc_id = omp_get_thread_num();
-    int start = size - sqrt(p - loc_id) * grid;
-    int end = size - sqrt(p - loc_id -1) * grid;
-
     double reg1,reg2;
-    for(long long i1=start; i1< end; i1++){
-        //double st_mem_time = omp_get_wtime();
+    #pragma omp for schedule(dynamic,1)
+    for(long long i1=0; i1< size; i1++){
         reg1= scannedWeights[i1];
         reg2= scannedWeightedFlux[i1];
-        //double after_mem_time = omp_get_wtime();
-        //mem_time+= after_mem_time - st_mem_time;
-        for(long long i2=(i1+1); i2< (long long) size; i2++){
-            //st_mem_time = omp_get_wtime();
+        for(long long i2=(i1+1); i2< size; i2++){
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
-            //after_mem_time = omp_get_wtime();
-            //mem_time+= after_mem_time - st_mem_time;
 
             d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
-            //double redctime = omp_get_wtime();
-           solution_t temp_solution = { d, i1,i2 };
+            solution_t temp_solution = { d, i1,i2 };
            if(temp_solution.d < solution.d){
                     solution.d = temp_solution.d;
                     solution.min_i1=temp_solution.min_i1;
@@ -102,6 +103,9 @@ double wtime = omp_get_wtime();
     }
   }
   ex_time = omp_get_wtime() - wtime;
+
+    if (PAPI_read(EventSet, values) != PAPI_OK) handle_error(1);
+    if (PAPI_stop(EventSet, values) != PAPI_OK) handle_error(1);
 
   if(solution.min_i1!=-1 && solution.min_i2!=-1) {
       double corrected_p =  -0.002*(time[solution.min_i2] - time[solution.min_i1]) + 0.032;

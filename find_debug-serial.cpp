@@ -11,12 +11,17 @@
 // to use the library either add -I$(ROOT)/include/CCfits or #include <CCfits/CCfits>
 // in the compilation target.
 #include <CCfits/CCfits>
+#include <stddef.h>
+#include <limits.h>
+#include <vector>
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <math.h>
 #include <float.h>
 #include <stdlib.h>
 #include <algorithm>
+#include <numeric>
 
 #if defined(_OPENMP)
 #include <omp.h>
@@ -35,7 +40,7 @@ typedef std::numeric_limits< double > dbl;
 const float EPSILON = 0.00000001f;
 using namespace std;
 
- int preprocess(std::string fileName,  vector<double> &fluxBLS, vector<double> &fluxErrBLS,  vector<double> &timeBLS)
+ size_t preprocess(std::string fileName,  vector<double> &fluxBLS, vector<double> &fluxErrBLS,  vector<double> &timeBLS)
 {
     // read a table and explicitly read selected columns. To read instead all the
     // data on construction, set the last argument of the FITS constructor
@@ -47,7 +52,7 @@ using namespace std;
     //hdus[2] = "APERTURE";
     std::auto_ptr<FITS> pInfile(new FITS(fileName,Read,hdus,true));
     ExtHDU& table = pInfile->extension(hdus[1]);
-    int fileSize = table.axis(1);
+    size_t fileSize = table.axis(1);
     cout << "read filesize: " << fileSize << endl;
     std::valarray <double> time, flux, flux_err;
     table.column("TIME").read( time, 1,fileSize );
@@ -56,7 +61,7 @@ using namespace std;
 
     cout.precision(dbl::max_digits10);
 
-    int toBeDeleted=0;
+    size_t toBeDeleted=0;
     for(size_t i=0; i<time.size(); i++){
 
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i]) ){
@@ -65,7 +70,7 @@ using namespace std;
     }
     cout << "cleaning NaNs: " << toBeDeleted << endl;
 
-    int newfileSize = time.size() - toBeDeleted;
+    size_t newfileSize = time.size() - toBeDeleted;
     vector<double> tempflux, temperr, temptime;
     for(size_t i=0; i< (size_t) time.size(); i++){
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])) continue;
@@ -102,7 +107,7 @@ using namespace std;
     }
      */
 
-    int numzeros=0;
+    size_t numzeros=0;
     // clean 0.0s so that power does not crash the program with infs
      for(size_t i=0; i< (size_t) newfileSize; i++){
         if(((normFlux[i]<EPSILON) && (normFlux[i]>= -EPSILON)) || ((normFluxErr[i]<EPSILON) && (normFluxErr[i]>= -EPSILON)) ){
@@ -134,61 +139,51 @@ using namespace std;
     return newfileSize;
 }
 
+
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-           vector<double> time, double helper_d, int size){
+           vector<double> time, double helper_d, size_t size){
   double r,s, d;
   int min_i1=-1, min_i2=-1;
   double d_min= DBL_MAX;
-  double ex_time = DBL_MIN;
+  double reg1, reg2;
+  //cout.precision(dbl::max_digits10);
 
-  //double mem_time = 0.0;
-  //double global_mem_time = 0.0;
     double wtime = omp_get_wtime();
-    double reg1,reg2;
-
-    for(size_t i1=0; i1< (size_t) size; i1++){
-        //double st_mem_time = omp_get_wtime();
+    for(long long i1=0; i1< size; i1++){
         reg1= scannedWeights[i1];
         reg2= scannedWeightedFlux[i1];
-        //double after_mem_time = omp_get_wtime();
-        //mem_time+= after_mem_time - st_mem_time;
-        for(size_t i2=(i1+1); i2< (size_t) size; i2++){
-            //st_mem_time = omp_get_wtime();
-            r = scannedWeights[i2] - reg1;
-            s = scannedWeightedFlux[i2] - reg2;
-            //r = reg1+ 2.0*reg2 - reg1;
-            //s = 4.0*reg2 - reg2;
-            //after_mem_time = omp_get_wtime();
-            //mem_time+= after_mem_time - st_mem_time;
+      for(long long i2=(i1+1); i2< size; i2++){
+        //double loop_time = omp_get_wtime();
+        r = scannedWeights[i2] - reg1;
+        s = scannedWeightedFlux[i2] - reg2;
 
-            d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
-            //double redctime = omp_get_wtime();
-            if(d < d_min){
-                d_min = d;
-                min_i1=i1;
-                min_i2=i2;
-            }
+        d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
+        //double redctime = omp_get_wtime();
+        if(d < d_min){
+          d_min = d;
+          min_i1=i1;
+          min_i2=i2;
         }
+      }
     }
+
     wtime = omp_get_wtime() - wtime;
 
-  if(min_i1!=-1 && min_i2!=-1) {
-      double period = time[min_i2] - time[min_i1] ;
-      double corrected_p = -0.002*period + 0.032;
-    cout << std::fixed << "results\n i1:\t" << min_i1 << "\ti2:\t" << min_i2 << "\td:\t" << d_min  << "\ttime:\t" << wtime << "\tcorrected period:\t"  << corrected_p << '\n' ;
-    //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
-  }
-  else cout << "could not find any pairs. latest d: " << d << endl;
+    if(min_i1!=-1 && min_i2!=-1) {
+        double corrected_p =  -0.002*(time[min_i2] - time[min_i1]) + 0.032;
+        double p =  time[min_i2] - time[min_i1];
+        cout << std::fixed << "resulting i1: " << min_i1 << "\ti2: " << min_i2 << "\td: " << d_min  << " time: " << wtime << " corrected period: "  <<  corrected_p  << " period: "  <<  p << " time[i2]: " << time[min_i2] << " time[i1]: " << time[min_i1] << '\n' ;
+    }
+    else cout << "could not find any pairs. latest d: " << d << endl;
+
 }
-
-
 int main(int argc, char **argv)
 {
-    FITS::setVerboseMode(true);
+   FITS::setVerboseMode(true);
     cout.precision(dbl::max_digits10);
     std::string fileName = argv[1];
 
-    int size ;
+    size_t size ;
     vector<double> view_flux;
     vector<double> view_fluxerr;
     vector<double> view_time;
@@ -199,24 +194,27 @@ int main(int argc, char **argv)
     vector<double> view_squaredfluxerr;
     // square errors
     transform(view_fluxerr.begin(), view_fluxerr.end(),  std::back_inserter(view_squaredfluxerr),
-                   [](double x) { cout.precision(dbl::max_digits10); return pow((double)x,-2.0); });
+                   [](double x) { cout.precision(dbl::max_digits10); return 1/(x *x ); });
     // sum squared errors and take power of sum
-    double sumW = pow(accumulate(view_squaredfluxerr.begin(), view_squaredfluxerr.end(),  0), -1);
-    //cout << "computed sumW \t" << sumW << endl << flush;
+    double sumW = 1.0/(accumulate(view_squaredfluxerr.begin(), view_squaredfluxerr.end(),  0));
+    cout << "computed sumW \t" << sumW << endl << flush;
 
     vector<double> view_weight;
     // create weight list with sumw*err^2
     transform(view_squaredfluxerr.begin(), view_squaredfluxerr.end(),  std::back_inserter(view_weight),
                    [sumW](double x) {  cout.precision(dbl::max_digits10); return sumW*x; });
 
+    // for s
     vector<double> view_weightedFlux;
     transform(view_flux.begin(), view_flux.end(), view_weight.begin(),  std::back_inserter(view_weightedFlux),
                    [](double f, double w) {  cout.precision(dbl::max_digits10); return f*w; });
 
+    // for d
     vector<double>  view_d;
-    transform(view_squaredfluxerr.begin(), view_squaredfluxerr.end(), view_weight.begin(), std::back_inserter(view_d),
-                   [](double sf, double w) {  cout.precision(dbl::max_digits10); return w * (1.0/sf); });
+    transform(view_flux.begin(), view_flux.end(), view_weight.begin(), std::back_inserter(view_d),
+                   [](double f, double w) {  cout.precision(dbl::max_digits10); return w * f * f; });
     double helper_d = accumulate(view_d.begin(), view_d.end(), 0);
+    cout << "constant sum for d : " << helper_d << endl;
 
     // prefix sum weighted flux
      vector<double> v_scanned_weightedFlux;
@@ -230,7 +228,11 @@ int main(int argc, char **argv)
     for(size_t i=1; i< (size_t) view_weight.size(); i++){
         v_scanned_weights.push_back(view_weight[i] + v_scanned_weights[i-1]);
     }
+
+    //double start_time = omp_get_wtime();
+    // do once. create time, flux and flux error.
     myBls(v_scanned_weights, v_scanned_weightedFlux, view_time,  helper_d,  size);
+    //double end_time = omp_get_wtime();
 
     //std::cout <<  "-finished BLS with time : " << end_time-start_time << "\n";
     //double max_time=0.0;
@@ -239,5 +241,5 @@ int main(int argc, char **argv)
     //        [&]{ std::cout << "\nmax time : " << max_time << std::endl;}
     //);
 
-    return EXIT_SUCCESS;
+    return 0;
 }
