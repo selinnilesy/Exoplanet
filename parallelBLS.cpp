@@ -48,14 +48,26 @@ const float EPSILON = 0.00000001f;
 using array_type = stapl::array<double>;
 using vector_type = stapl::vector<double>;
 
-
+#if SIZE_MAX == UCHAR_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
+#elif SIZE_MAX == USHRT_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_SHORT
+#elif SIZE_MAX == UINT_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED
+#elif SIZE_MAX == ULONG_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG
+#elif SIZE_MAX == ULLONG_MAX
+   #define my_MPI_SIZE_T MPI_UNSIGNED_LONG_LONG
+#else
+   #error "what is happening here?"
+#endif
 // transform
 struct powerWeight {
 typedef double result_type; // ## 5
     template <typename Ref1>
     result_type operator()(Ref1 &&x) {
         cout.precision(dbl::max_digits10);
-        return pow((double)x,-2.0);
+        return 1.0/(x*x);
   }
 };
 // map func
@@ -94,9 +106,9 @@ public:
     result_type operator()(T1 &&val1, T2 &&val2, T3 &&output)
     {
         cout.precision(dbl::max_digits10);
-        double flux = val1;
+        double sf = val1;
         double weight = val2;
-        output = weight * (1.0 / flux);
+        output = weight * (1.0 / sf);
     }
 };
 
@@ -112,7 +124,7 @@ public:
     //hdus[2] = "APERTURE";
     std::auto_ptr<FITS> pInfile(new FITS(fileName,Read,hdus,true));
     ExtHDU& table = pInfile->extension(hdus[1]);
-    int fileSize = table.axis(1);
+    size_t fileSize = table.axis(1);
     cout << "read filesize: " << fileSize << endl;
     std::valarray <double> time, flux, flux_err;
     table.column("TIME").read( time, 1,fileSize );
@@ -121,7 +133,7 @@ public:
 
     cout.precision(dbl::max_digits10);
 
-    int toBeDeleted=0;
+    size_t toBeDeleted=0;
     for(size_t i=0; i<time.size(); i++){
 
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i]) ){
@@ -130,7 +142,7 @@ public:
     }
     cout << "cleaning NaNs: " << toBeDeleted << endl;
 
-    int newfileSize = time.size() - toBeDeleted;
+    size_t newfileSize = time.size() - toBeDeleted;
     vector<double> tempflux, temperr, temptime;
     for(size_t i=0; i< (size_t) time.size(); i++){
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])) continue;
@@ -167,7 +179,7 @@ public:
     }
      */
 
-    int numzeros=0;
+    size_t numzeros=0;
     // clean 0.0s so that power does not crash the program with infs
      for(size_t i=0; i< (size_t) newfileSize; i++){
         if(((normFlux[i]<EPSILON) && (normFlux[i]>= -EPSILON)) || ((normFluxErr[i]<EPSILON) && (normFluxErr[i]>= -EPSILON)) ){
@@ -199,90 +211,128 @@ public:
     return newfileSize;
 }
 
+ typedef struct {
+    double d;
+    int min_i1;
+    int min_i2;
+ } solution_t;
+
+ /* custom structs and reduction, taken from here
+  * https://stackoverflow.com/questions/65874060/an-efficient-way-to-perform-an-all-reduction-in-mpi-of-a-value-based-on-another
+  */
+ void compute_min_struct(void *in, void *inout, int *len, MPI_Datatype *type){
+    solution_t *invals    = (solution_t *) in;
+    solution_t *inoutvals = (solution_t *) inout;
+    for (int i=0; i<(*len); i++){
+        if(inoutvals[i].d < invals[i].d){
+            inoutvals[i].d  = invals[i].d;
+            inoutvals[i].min_i1  = invals[i].min_i1;
+            inoutvals[i].min_i2  = invals[i].min_i2;
+        }
+    }
+}
+void defineStruct(MPI_Datatype *tstype) {
+    const int count = 3;
+    int          blocklens[count];
+    MPI_Datatype types[count];
+    MPI_Aint     disps[count];
+
+    for (int i=0; i < count; i++) {
+        if(i==0){
+            types[i] = MPI_DOUBLE;
+        }
+        else{
+            types[i] = MPI_INT;
+        }
+        blocklens[i] = 1;
+    }
+    disps[0] = offsetof(solution_t,d);
+    disps[1] = offsetof(solution_t,min_i1);
+    disps[2] = offsetof(solution_t,min_i2);
+
+    MPI_Type_create_struct(count, blocklens, disps, types, tstype);
+    MPI_Type_commit(tstype);
+}
+
 void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<vector_type> scannedWeightedFlux,
-            stapl::vector_view<vector_type> time, double helper_d, int size){
+            stapl::vector_view<vector_type> time, double helper_d, size_t size){
     double r,s, d;
     cout.precision(dbl::max_digits10);
     int num_loc = stapl::get_num_locations();
     int loc_id = stapl::get_location_id();
-    int portion = (int) ceil((1.0*size)/num_loc);
-    //using domain_type = stapl::indexed_domain<size_t>;
-    //using arr_view_indexed_type = stapl::array_view<stapl::array_view<array_type>, domain_type>;
-    //using vec_view_indexed_type = stapl::vector_view<stapl::vector_view<vector_type>, domain_type>;
-    double d_min= DBL_MAX;
-    int min_i1=-1; int min_i2=-1 , upper_limit=loc_id*portion;
-    cout << loc_id<< " in bls" << endl;
 
-    if(loc_id!=num_loc-1){
-        upper_limit=(loc_id+1)*portion;
-    }
-    else{
-      upper_limit=size;
-    }
+    MPI_Datatype structtype;
+    MPI_Op       minop_struct;
+    defineStruct(&structtype);
+    MPI_Op_create(compute_min_struct, 1, &minop_struct);
 
-    for(size_t i1=loc_id*portion; i1< (size_t) upper_limit; i1++){
+    solution_t local_solution = { DBL_MAX, -1,-1 };
+    solution_t global_solution = { DBL_MAX, -1,-1 };
+    double max_time=0.0;
+
+    stapl::counter<stapl::mpi_wtime_timer> t;
+    t.start();
+
+    size_t grid= size/sqrt(num_loc);
+    size_t start = size - sqrt(num_loc - loc_id) * grid;
+    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
+
+    for(size_t i1=start; i1< (size_t) end; i1++){
         double reg1= scannedWeights[i1];
         double reg2= scannedWeightedFlux[i1];
         for(size_t i2=(i1+1); i2< (size_t) size; i2++){
-            //cout << loc_id<< "-testing i1: " << i1 << "\ti2: " << i2 << "\td: " << d  << '\n' ;
-            //domain_type dom(i1, i2);
-            //arr_view_indexed_type v_indexedWeights(view_weight, dom);
-            //r = accumulate(v_indexedWeights, 0);
-
             r = scannedWeights[i2] - reg1;
-
-            //arr_view_indexed_type v_indexedS(view_weightedFlux, dom);
-            //s = accumulate(v_indexedS, 0);
             s = scannedWeightedFlux[i2] - reg2;
-
-            d = (helper_d - ( (pow(s, 2.0)) / ( 1.0 * r *  (1.0-r) )));
-            d = -0.002*d + 0.032;
-            if(d < d_min){
-                d_min = d;
-                min_i1=i1;
-                min_i2=i2;
+            d = (helper_d - ( s*s)) / ( 1.0 * r *  (1.0-r) );
+            if(d < local_solution.d){
+                local_solution.d  = d;
+                local_solution.min_i1=i1;
+                local_solution.min_i2=i2;
             }
         }
     }
-   if(min_i1!=-1 && min_i2!=-1) {
-       cout << loc_id << "'s resulting i1: " << min_i1 << "\ti2: " << min_i2 << "\td: " << d_min  << '\n' ;
-       cout << loc_id << "'s Period: " << std::fixed << time[min_i2] - time[min_i1] << '\n' ;
-   }
-   else cout << "could not find any pairs. latest d: " << d << endl;
-
+    MPI_Reduce(&local_solution, &global_solution, 1, structtype, minop_struct, 0, MPI_COMM_WORLD);
+    double measured_time = t.stop();
+    MPI_Reduce(&measured_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+    stapl::do_once(
+    [&]{
+        std::cout << "\nmax time : " << max_time << std::endl;
+        if(global_solution.min_i1!= -1 && global_solution.min_i2!= -1) {
+            cout << " Resulting i1: " << global_solution.min_i1 << "\ti2: " << global_solution.min_i2 << "\td: " << global_solution.d  << '\n' ;
+            cout <<" Period: " << std::fixed << time[global_solution.min_i2] - time[global_solution.min_i1] << '\n' ;
+        }
+        else cout << "could not find any pairs. latest d: " << d << endl;
+    });
 }
  stapl::exit_code stapl_main(int argc, char **argv)
 {
     FITS::setVerboseMode(true);
     cout.precision(dbl::max_digits10);
     std::string fileName = argv[1];
-    //int num_loc = stapl::get_num_locations();
-    int size = 0;
+    int num_loc = stapl::get_num_locations();
+    int loc_id = stapl::get_location_id();
+    size_t size = 0;
     vector_type vflux;
     stapl::vector_view<vector_type> view_flux(vflux);
     vector_type vfluxerr;
     stapl::vector_view<vector_type> view_fluxerr(vfluxerr);
     vector_type vtime;
     stapl::vector_view<vector_type> view_time(vtime);
-
-     stapl::do_once(
+    stapl::do_once(
             [&]{
                 size = preprocess(fileName, view_flux, view_fluxerr, view_time);
             });
      MPI_Bcast( &size, 1, MPI_INT, 0,  MPI_COMM_WORLD);
-     int loc_id = stapl::get_location_id();
+     std::cout  << loc_id << ": successfully readImage() with size: " << size << std::endl;
 
+    size_t grid= size/sqrt(num_loc);
+    size_t start = size - sqrt(num_loc - loc_id) * grid;
+    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
 
-     if(loc_id==3){
-         cout << "after preprocessing.. view_time \t view_flux \t view_fluxerr" << endl;
-         for(size_t i=0; i< (size_t) size; i++){
-            cout << std::fixed<< view_time[i] << '\t' << view_flux[i] << '\t' <<  view_fluxerr[i] << '\n';
-         }
-     }
-
-    stapl::rmi_barrier();
-
-    std::cout  << loc_id << ": successfully readImage() with size: " << size << std::endl;
+    using domain_type = stapl::indexed_domain<size_t, 2>;
+    domain_type dom(start,end);
+    using vec_view_type = stapl::vector_view<vector_type,
+                                              dom>;
 
     array_type squaredflux(size, 0.0);
     stapl::array_view<array_type> view_squaredfluxerr(squaredflux);
@@ -308,17 +358,19 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
 
     // prefix sum weighted flux
      vector_type scanned_weightedFlux(size);
-     stapl::vector_view<vector_type> v_scanned_weightedFlux(scanned_weightedFlux);
+     vec_view_type v_scanned_weightedFlux(scanned_weightedFlux);
     stapl::scan(view_weightedFlux, v_scanned_weightedFlux, double_plus(), false);
     // prefix sum weights
      vector_type scanned_weights(size);
-     stapl::vector_view<vector_type> v_scanned_weights(scanned_weights);
+     vec_view_type v_scanned_weights(scanned_weights);
     stapl::scan(view_weight, v_scanned_weights, double_plus(), false);
 
+    /*
     std::vector<double> std_scanned_weights;
     std::copy(v_scanned_weights.begin(), v_scanned_weights.end(), back_inserter(std_scanned_weights));
     std::vector<double> std_scanned_weightedFlux;
     std::copy(v_scanned_weightedFlux.begin(), v_scanned_weightedFlux.end(), back_inserter(std_scanned_weightedFlux));
+     */
 
     /*
     using dummy = typename stapl::set<size_t>::mapper_type::dummy;
@@ -327,22 +379,12 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
                    decltype(map_factory), id_type, id_type>(map_factory)
      block_map<id_type, id_type>(block_size), distribution_type::blocked);
      */
-
-
+    cout << loc_id << ": came to barrier \t" << endl << flush;
     stapl::rmi_barrier();
+    cout << loc_id << ": starting myBLS \t" << endl << flush;
 
-    stapl::counter<stapl::mpi_wtime_timer> t;
-    t.start();
     // do once. create time, flux and flux error.
     myBls(v_scanned_weights, v_scanned_weightedFlux, view_time, helper_d,  size);
-
-    double time = t.stop();
-    std::cout << loc_id << "-finished BLS with time : " << time << "\n";
-    double max_time=0.0;
-    MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-    stapl::do_once(
-            [&]{ std::cout << "\nmax time : " << max_time << std::endl;}
-    );
 
     return EXIT_SUCCESS;
 }

@@ -40,7 +40,7 @@ using namespace std;
 
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-           vector<double> time, double helper_d, long long size){
+           vector<double> time, double helper_d, size_t size){
 
   double r,s, d;
   int min_i1=-1, min_i2=-1;
@@ -58,8 +58,8 @@ void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
 
   typedef struct {
     double d;
-    long long min_i1;
-    long long min_i2;
+    int min_i1;
+    int min_i2;
   } solution_t;
 
 solution_t solution = { DBL_MAX, -1,-1 };
@@ -77,13 +77,13 @@ double wtime = omp_get_wtime();
     int end = size - sqrt(p - loc_id -1) * grid;
 
     double reg1,reg2;
-    for(long long i1=start; i1< end; i1++){
+    for(size_t i1=start; i1< (size_t) end; i1++){
         //double st_mem_time = omp_get_wtime();
         reg1= scannedWeights[i1];
         reg2= scannedWeightedFlux[i1];
         //double after_mem_time = omp_get_wtime();
         //mem_time+= after_mem_time - st_mem_time;
-        for(long long i2=(i1+1); i2< (long long) size; i2++){
+        for(size_t i2=(i1+1); i2< size; i2++){
             //st_mem_time = omp_get_wtime();
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
@@ -104,8 +104,8 @@ double wtime = omp_get_wtime();
   ex_time = omp_get_wtime() - wtime;
 
   if(solution.min_i1!=-1 && solution.min_i2!=-1) {
-      double corrected_p =  -0.002*(time[solution.min_i2] - time[solution.min_i1]) + 0.032;
-    cout << std::fixed << "resulting i1: " << solution.min_i1 << "\ti2: " << solution.min_i2 << "\td: " << solution.d  << " time: " << ex_time << " period: "  <<  corrected_p << '\n' ;
+      double period =  time[solution.min_i2] - time[solution.min_i1];
+    cout << std::fixed << "resulting i1: " << solution.min_i1 << "\ti2: " << solution.min_i2 << "\td: " << solution.d  << " time: " << ex_time << " period: "  <<  period << '\n' ;
     //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
   }
   else cout << "could not find any pairs. latest d: " << d << endl;
@@ -115,11 +115,11 @@ int main(int argc, char **argv)
 {
  // cout.precision(dbl::max_digits10);
 
-  long long size = atoi(argv[1]);
+  size_t size = atoi(argv[1]);
   vector<double> view_flux;
   vector<double> view_fluxerr;
   vector<double> view_time;
-  for(long long i=0; i< size; i++){
+  for(size_t i=0; i< size; i++){
     double flux =  (double)rand() / RAND_MAX;
     view_flux.push_back(0.005 + flux * (3.2 - 0.005));
     view_fluxerr.push_back(0.0003);
@@ -153,13 +153,13 @@ int main(int argc, char **argv)
   // prefix sum weighted flux
   vector<double> v_scanned_weightedFlux;
   v_scanned_weightedFlux.push_back(view_weightedFlux[0]);
-  for(long long i=1; i< (long long) view_weightedFlux.size(); i++){
+  for(size_t i=1; i< (size_t) view_weightedFlux.size(); i++){
     v_scanned_weightedFlux.push_back(view_weightedFlux[i] + v_scanned_weightedFlux[i-1]);
   }
   // prefix sum weights
   vector<double> v_scanned_weights;
   v_scanned_weights.push_back(view_weight[0]);
-  for(long long i=1; i< (long long) view_weight.size(); i++){
+  for(size_t i=1; i< (size_t) view_weight.size(); i++){
     v_scanned_weights.push_back(view_weight[i] + v_scanned_weights[i-1]);
   }
 

@@ -41,22 +41,26 @@ using namespace std;
     // data on construction, set the last argument of the FITS constructor
     // call to ’true’. This functionality was tested in the last release.
 
+    //std::vector<string> hdus(3);
     std::vector<string> hdus(2);
     hdus[0] = "PRIMARY";
     hdus[1] = "LIGHTCURVE";
     //hdus[2] = "APERTURE";
     std::auto_ptr<FITS> pInfile(new FITS(fileName,Read,hdus,true));
     ExtHDU& table = pInfile->extension(hdus[1]);
-    int fileSize = table.axis(1);
+    size_t fileSize = table.axis(1);
     cout << "read filesize: " << fileSize << endl;
     std::valarray <double> time, flux, flux_err;
     table.column("TIME").read( time, 1,fileSize );
+    //table.column("SAP_FLUX").read( flux, 1,fileSize );
+    //table.column("SAP_FLUX_ERR").read( flux_err, 1,fileSize );
+    // for mock below, also comment out hdus[2] for mock
     table.column("FLUX").read( flux, 1,fileSize );
     table.column("FLUX_ERR").read( flux_err, 1,fileSize );
 
     cout.precision(dbl::max_digits10);
 
-    int toBeDeleted=0;
+    size_t toBeDeleted=0;
     for(size_t i=0; i<time.size(); i++){
 
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i]) ){
@@ -65,7 +69,7 @@ using namespace std;
     }
     cout << "cleaning NaNs: " << toBeDeleted << endl;
 
-    int newfileSize = time.size() - toBeDeleted;
+    size_t newfileSize = time.size() - toBeDeleted;
     vector<double> tempflux, temperr, temptime;
     for(size_t i=0; i< (size_t) time.size(); i++){
         if(std::isnan(time[i]) || std::isnan(flux[i]) || std::isnan(flux_err[i])) continue;
@@ -102,7 +106,7 @@ using namespace std;
     }
      */
 
-    int numzeros=0;
+    size_t numzeros=0;
     // clean 0.0s so that power does not crash the program with infs
      for(size_t i=0; i< (size_t) newfileSize; i++){
         if(((normFlux[i]<EPSILON) && (normFlux[i]>= -EPSILON)) || ((normFluxErr[i]<EPSILON) && (normFluxErr[i]>= -EPSILON)) ){
@@ -135,13 +139,16 @@ using namespace std;
 }
 
 void myBls( vector<double> scannedWeights ,vector<double> scannedWeightedFlux,
-           vector<double> time, double helper_d, long long size){
+           vector<double> time, double helper_d, size_t size){
 
   double r,s, d;
-  int min_i1=-1, min_i2=-1;
+  size_t min_i1=-1, min_i2=-1;
   double d_min= DBL_MAX;
   double ex_time = DBL_MIN;
   std::setprecision(15);
+
+  int p = atoi(getenv("OMP_NUM_THREADS"));
+  size_t grid= size/sqrt(p);
 
   typedef struct {
     double d;
@@ -160,14 +167,14 @@ double wtime = omp_get_wtime();
   {
     int num_loc = omp_get_num_threads();
     int loc_id = omp_get_thread_num();
-    int start = size - sqrt(p - loc_id) * grid;
-    int end = size - sqrt(p - loc_id -1) * grid;
+    size_t start = size - sqrt(p - loc_id) * grid;
+    size_t end = size - sqrt(p - loc_id -1) * grid;
 
     double reg1,reg2;
-    for(long long i1=start; i1< end; i1++){
+    for(size_t i1=start; i1< end; i1++){
         reg1= scannedWeights[i1];
         reg2= scannedWeightedFlux[i1];
-        for(long long i2=(i1+1); i2< (long long) size; i2++){
+        for(size_t i2=(i1+1); i2< size; i2++){
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
             d = (helper_d - ( (s*s) / ( 1.0 * r *  (1.0-r) )));
@@ -183,8 +190,9 @@ double wtime = omp_get_wtime();
   ex_time = omp_get_wtime() - wtime;
 
   if(solution.min_i1!=-1 && solution.min_i2!=-1) {
-      double corrected_p =  -0.002*(time[solution.min_i2] - time[solution.min_i1]) + 0.032;
-    cout << std::fixed << "resulting i1: " << solution.min_i1 << "\ti2: " << solution.min_i2 << "\td: " << solution.d  << " time: " << ex_time << " period: "  <<  corrected_p << '\n' ;
+     // double corrected_p =  -0.002*(time[solution.min_i2] - time[solution.min_i1]) + 0.032;
+     double period =  time[solution.min_i2] - time[solution.min_i1];
+    cout << std::fixed << "resulting i1: " << solution.min_i1 << "\ti2: " << solution.min_i2 << "\td: " << solution.d  << " time: " << ex_time << " period: "  <<  period << '\n' ;
     //cout << std::fixed << " mem-time: " << global_mem_time   << '\n' ;
   }
   else cout << "could not find any pairs. latest d: " << d << endl;
@@ -198,7 +206,7 @@ int main(int argc, char **argv)
     cout.precision(dbl::max_digits10);
     std::string fileName = argv[1];
 
-    int size ;
+    size_t size ;
     vector<double> view_flux;
     vector<double> view_fluxerr;
     vector<double> view_time;
