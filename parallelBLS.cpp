@@ -254,8 +254,8 @@ void defineStruct(MPI_Datatype *tstype) {
     MPI_Type_commit(tstype);
 }
 
-void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<vector_type> scannedWeightedFlux,
-            stapl::vector_view<vector_type> time, double helper_d, size_t size){
+void myBls( std::vector<double> scannedWeights ,std::vector<double> scannedWeightedFlux,
+            std::vector<double> time, double helper_d, size_t size){
     double r,s, d;
     cout.precision(dbl::max_digits10);
     int num_loc = stapl::get_num_locations();
@@ -309,8 +309,7 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     FITS::setVerboseMode(true);
     cout.precision(dbl::max_digits10);
     std::string fileName = argv[1];
-    int num_loc = stapl::get_num_locations();
-    int loc_id = stapl::get_location_id();
+    //int num_loc = stapl::get_num_locations();
     size_t size = 0;
     vector_type vflux;
     stapl::vector_view<vector_type> view_flux(vflux);
@@ -318,21 +317,17 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     stapl::vector_view<vector_type> view_fluxerr(vfluxerr);
     vector_type vtime;
     stapl::vector_view<vector_type> view_time(vtime);
-    stapl::do_once(
+
+     stapl::do_once(
             [&]{
                 size = preprocess(fileName, view_flux, view_fluxerr, view_time);
             });
      MPI_Bcast( &size, 1, MPI_INT, 0,  MPI_COMM_WORLD);
-     std::cout  << loc_id << ": successfully readImage() with size: " << size << std::endl;
+     int loc_id = stapl::get_location_id();
 
-    size_t grid= size/sqrt(num_loc);
-    size_t start = size - sqrt(num_loc - loc_id) * grid;
-    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
+    stapl::rmi_barrier();
 
-    using domain_type = stapl::indexed_domain<size_t, 2>;
-    domain_type dom(start,end);
-    using vec_view_type = stapl::vector_view<vector_type,
-                                              dom>;
+    std::cout  << loc_id << ": successfully readImage() with size: " << size << std::endl;
 
     array_type squaredflux(size, 0.0);
     stapl::array_view<array_type> view_squaredfluxerr(squaredflux);
@@ -358,19 +353,19 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
 
     // prefix sum weighted flux
      vector_type scanned_weightedFlux(size);
-     vec_view_type v_scanned_weightedFlux(scanned_weightedFlux);
+     stapl::vector_view<vector_type> v_scanned_weightedFlux(scanned_weightedFlux);
     stapl::scan(view_weightedFlux, v_scanned_weightedFlux, double_plus(), false);
     // prefix sum weights
      vector_type scanned_weights(size);
-     vec_view_type v_scanned_weights(scanned_weights);
+     stapl::vector_view<vector_type> v_scanned_weights(scanned_weights);
     stapl::scan(view_weight, v_scanned_weights, double_plus(), false);
 
-    /*
     std::vector<double> std_scanned_weights;
     std::copy(v_scanned_weights.begin(), v_scanned_weights.end(), back_inserter(std_scanned_weights));
     std::vector<double> std_scanned_weightedFlux;
     std::copy(v_scanned_weightedFlux.begin(), v_scanned_weightedFlux.end(), back_inserter(std_scanned_weightedFlux));
-     */
+    std::vector<double> view_std;
+    std::copy(view_time.begin(), view_time.end(), back_inserter(view_std));
 
     /*
     using dummy = typename stapl::set<size_t>::mapper_type::dummy;
@@ -384,7 +379,7 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     cout << loc_id << ": starting myBLS \t" << endl << flush;
 
     // do once. create time, flux and flux error.
-    myBls(v_scanned_weights, v_scanned_weightedFlux, view_time, helper_d,  size);
+    myBls(std_scanned_weights, std_scanned_weightedFlux, view_std, helper_d,  size);
 
     return EXIT_SUCCESS;
 }
