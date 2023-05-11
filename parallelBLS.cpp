@@ -26,6 +26,7 @@
 #include <stapl/utility/do_once.hpp>
 #include <stapl/algorithms/algorithm.hpp>
 #include <algorithm>
+#include <stapl/containers/distribution/distribution.hpp>
 #include <stapl/containers/set/set.hpp>
 #include  <stapl/runtime/counter/mpi/mpi_wtime_timer.hpp>
 
@@ -49,11 +50,7 @@ using array_type = stapl::array< double,
         stapl::view_based_partition<stapl::distribution_spec<>>,
         stapl::view_based_mapper<stapl::distribution_spec<>>
     >;
-using vector_type_temp = stapl::vector<double>;
-using vector_type = stapl::vector< double,
-        stapl::view_based_partition<stapl::distribution_spec<>>,
-        stapl::view_based_mapper<stapl::distribution_spec<>>
-    >;
+using vector_type = stapl::vector<double>;
 
 #if SIZE_MAX == UCHAR_MAX
    #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
@@ -119,7 +116,7 @@ public:
     }
 };
 
- int preprocess(std::string fileName,  stapl::vector_view<vector_type_temp> &fluxBLS, stapl::vector_view<vector_type_temp> &fluxErrBLS,  stapl::vector_view<vector_type_temp> &timeBLS)
+ int preprocess(std::string fileName,  stapl::vector_view<vector_type> &fluxBLS, stapl::vector_view<vector_type> &fluxErrBLS,  stapl::vector_view<vector_type> &timeBLS)
 {
     // read a table and explicitly read selected columns. To read instead all the
     // data on construction, set the last argument of the FITS constructor
@@ -262,7 +259,7 @@ void defineStruct(MPI_Datatype *tstype) {
 }
 
 void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<vector_type> scannedWeightedFlux,
-            stapl::vector_view<vector_type_temp> time, double helper_d, size_t size){
+            stapl::vector_view<vector_type> time, double helper_d, size_t size){
     double r,s, d;
     cout.precision(dbl::max_digits10);
     int num_loc = stapl::get_num_locations();
@@ -316,14 +313,14 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     FITS::setVerboseMode(true);
     cout.precision(dbl::max_digits10);
     std::string fileName = argv[1];
-    //int num_loc = stapl::get_num_locations();
+    int num_loc = stapl::get_num_locations();
     size_t size = 0;
-    vector_type_temp vflux;
-    stapl::vector_view<vector_type_temp> view_flux(vflux);
-    vector_type_temp vfluxerr;
-    stapl::vector_view<vector_type_temp> view_fluxerr(vfluxerr);
-    vector_type_temp vtime;
-    stapl::vector_view<vector_type_temp> view_time(vtime);
+    vector_type vflux;
+    stapl::vector_view<vector_type> view_flux(vflux);
+    vector_type vfluxerr;
+    stapl::vector_view<vector_type> view_fluxerr(vfluxerr);
+    vector_type vtime;
+    stapl::vector_view<vector_type> view_time(vtime);
 
      stapl::do_once(
             [&]{
@@ -336,7 +333,7 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
 
     std::cout  << loc_id << ": successfully readImage() with size: " << size << std::endl;
 
-    array_type squaredflux(stapl::balance(size), 0.0);
+    array_type squaredflux((size), 0.0);
     stapl::array_view<array_type> view_squaredfluxerr(squaredflux);
     // square errors
     stapl::transform(view_fluxerr, view_squaredfluxerr, powerWeight());
@@ -344,26 +341,26 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     double sumW = pow(accumulate(view_squaredfluxerr, 0), -1);
     cout << "computed sumW \t" << sumW << endl << flush;
 
-    array_type listWeight(stapl::balance(size));
+    array_type listWeight((size));
     stapl::array_view<array_type> view_weight(listWeight);
     // create weight list with sumw*err^2
     stapl::map_func(weightListCreate(sumW), view_squaredfluxerr, view_weight);
 
-    array_type weightedFlux(stapl::balance(size), 0.0);
+    array_type weightedFlux((size), 0.0);
     stapl::array_view<array_type> view_weightedFlux(weightedFlux);
     stapl::transform(view_flux, view_weight, view_weightedFlux, createS());
 
-    array_type arr_d(stapl::balance(size));
+    array_type arr_d((size));
     stapl::array_view<array_type> view_d(arr_d);
     stapl::map_func(createD(), view_squaredfluxerr, view_weight, view_d);
     double helper_d = accumulate(view_d, 0);
 
     // prefix sum weighted flux
-     vector_type scanned_weightedFlux(stapl::balance(size));
+     vector_type scanned_weightedFlux((size));
      stapl::vector_view<vector_type> v_scanned_weightedFlux(scanned_weightedFlux);
     stapl::scan(view_weightedFlux, v_scanned_weightedFlux, double_plus(), false);
     // prefix sum weights
-     vector_type scanned_weights(stapl::balance(size));
+     vector_type scanned_weights((size));
      stapl::vector_view<vector_type> v_scanned_weights(scanned_weights);
     stapl::scan(view_weight, v_scanned_weights, double_plus(), false);
 
@@ -373,7 +370,6 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     std::vector<double> std_scanned_weightedFlux;
     std::copy(v_scanned_weightedFlux.begin(), v_scanned_weightedFlux.end(), back_inserter(std_scanned_weightedFlux));
      */
-
     /*
     using dummy = typename stapl::set<size_t>::mapper_type::dummy;
 
@@ -381,13 +377,30 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
                    decltype(map_factory), id_type, id_type>(map_factory)
      block_map<id_type, id_type>(block_size), distribution_type::blocked);
      */
+
+     vector_type m_scanned_weights((size));
+     stapl::vector_view<vector_type> mv_scanned_weights(m_scanned_weights);
+     vector_type m_scanned_weightedFlux((size));
+     stapl::vector_view<vector_type> mv_scanned_weightedFlux(m_scanned_weightedFlux);
+     vector_type m_vtime((size));
+     stapl::vector_view<vector_type> mv_time(m_vtime);
+
+     size_t grid= size/sqrt(num_loc);
+    size_t start = size - sqrt(num_loc - loc_id) * grid;
+    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
+    for(size_t i=start; i< end; i++){
+        mv_scanned_weights.add(v_scanned_weights[i]);
+        mv_scanned_weightedFlux.add(scanned_weightedFlux[i]);
+        mv_time.add(vtime[i]);
+    }
+
     cout << loc_id << ": came to barrier \t" << endl << flush;
     stapl::rmi_barrier();
     cout << loc_id << ": starting myBLS \t" << endl << flush;
 
 
     // do once. create time, flux and flux error.
-    myBls(v_scanned_weights, v_scanned_weightedFlux, vtime, helper_d,  size);
+    myBls(mv_scanned_weights, mv_scanned_weightedFlux, mv_time, helper_d,  size);
 
     return EXIT_SUCCESS;
 }
