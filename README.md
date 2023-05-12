@@ -21,9 +21,17 @@ Experiments are under experiments directory. Their more sophisticated categoriza
 CC organizes experiments based on the input size, in each folder there are different runs for variety of implementations (scheduling, load balancing)
 
 # Notes:
-Observation : for size=873, with both syntethic and mock file, debug and ompBLS programs finish around 6*10^-3 seconds with 4 threads.
-STAPL version parallelBLS with 4 MPI processes take around 3.6 seconds for the same mock file of 873 size when using stapl arrays.  for this one bottleneck is not reduction but the communications, as stapl vectors are not maintained local to process. removing reduction over custom defined MPI reduction only faster by 0.002 second.
+STAPL Solutions: \
+\
+The most basic STAPL solution can be found in commit with id : commit de2e9c2. See parallelBls.cpp and it has balanced distribution.
 Stapl balanced distribution is as slow as no distirbution specified.
+The most plain STAPL solution can be found in commit with id : commit 0d01ca3. Has no distribution specified Vectors are initialized locally but automatically distributed by STAPL runtime system. Slow due to contention.
+
+Performance Observations: 
+
+
+for size=873, with both syntethic and mock file, debug and ompBLS programs finish around 6*10^-3 seconds with 4 threads.
+STAPL version parallelBLS with 4 MPI processes take around 3.6 seconds for the same mock file of 873 size when using stapl arrays.  for this one bottleneck is not reduction but the communications, as stapl vectors are not maintained local to process. removing reduction over custom defined MPI reduction only faster by 0.002 second.
 Stapl local vectors by using vector add is as slow due to incurred communication.
 With std::vectors however, 4 MPI processes finish 0.0006 seconds for the same mock file. The same version gives stapl runtime errors with big datafiles such as 112k.
 All these versions are committed to parallelBLS.cpp file separately.
