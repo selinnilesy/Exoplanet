@@ -45,10 +45,10 @@ typedef stapl::plus<double> double_plus;
 typedef std::numeric_limits< double > dbl;
 const float EPSILON = 0.00000001f;
 using array_type = stapl::array< double>;
-using nested_array_type = stapl::array< std::vector<double>>;
-using nested_array_type_int = stapl::array< std::vector<int>>;
 using vector_type = stapl::vector<double>;
 using vector_type_int = stapl::vector<int>;
+using nested_array_type = stapl::array<vector_type>;
+using nested_array_type_int = stapl::array< std::vector<int>>;
 
 #if SIZE_MAX == UCHAR_MAX
    #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
@@ -496,10 +496,14 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     size_t start = size - sqrt(num_loc - loc_id) * grid;
     size_t end = size - sqrt(num_loc - loc_id -1) * grid;
 
-    std::vector<double> w, wf;
+    //std::vector<double> w, wf;
+    vector_type w;
+    stapl::vector_view<vector_type> v_w(w);
+    vector_type wf;
+    stapl::vector_view<vector_type> v_wf(wf);
     for(size_t i=start; i< end; i++){
-        w.push_back(v_scanned_weights[i]);
-        wf.push_back(v_scanned_weightedFlux[i]);
+        v_w.add(v_scanned_weights[i]);
+        v_wf.add(v_scanned_weightedFlux[i]);
     }
     nested_array_type w_location_vecs(num_loc);
     stapl::array_view<nested_array_type> v_w_location_vecs(w_location_vecs);
