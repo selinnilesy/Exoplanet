@@ -16,8 +16,9 @@ below files should be almost identical to above files in the sense that changes 
 -  serial.cpp :  oldest serial version of the above with no optimizations. direct c++ version for naive python. use above serial codes for speedup comparisons.
 
 # Experiments: 
-Logs folder is old and used for solving a bug, ignore it.
-Experiments are under experiments directory. Their more sophisticated categorization is done in Campus Cluster rather than Parasol.
+Logs folder is old and used for solving a bug, ignore it. \
+Experiments are under experiments directory. Their more sophisticated categorization is done in Campus Cluster rather than Parasol. \
+Campus cluster experiments (where we achieve good  speedup with a max of 14 for 16 threads) is under cc-experiments directory. \
 CC organizes experiments based on the input size, in each folder there are different runs for variety of implementations (scheduling, load balancing)
 
 # Notes:
