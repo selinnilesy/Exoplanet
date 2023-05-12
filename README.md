@@ -36,4 +36,6 @@ Stapl local vectors by using vector add is as slow due to incurred communication
 With std::vectors however, 4 MPI processes finish 0.0006 seconds for the same mock file. The same version gives stapl runtime errors with big datafiles such as 112k.
 All these versions are committed to parallelBLS.cpp file separately.
 
-Implementing the load balance is no trivial as map functions requires wrapping local data of processes into nested vectors before distributing them. Future library implementation is the last work that is started for the sake of overlapping load communication and computation.
+Implementing the load balance is no trivial as map functions requires wrapping local data of processes into nested vectors before distributing them. Future library implementation is the last work that is started for the sake of overlapping load communication and computation. \
+Based on trials, map function unrolls arguments of stapl vectors of std vectors, but communciations via future cannot be performed due to std. \
+Alternatively, passing stapl array views of stapl views of data does not unroll to stapl views of data in each location.
