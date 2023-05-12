@@ -1,0 +1,38 @@
+created inputs	
+computed sumW 	5.89289e-10
+found 32 threads in the program.
+computed 791015625 areaPerProc.
+computed area offset for 0:	0
+computed area offset for 1:	3554
+computed area offset for 2:	7155
+computed area offset for 3:	10816
+computed area offset for 4:	14541
+computed area offset for 5:	18333
+computed area offset for 6:	22196
+computed area offset for 7:	26134
+computed area offset for 8:	30152
+computed area offset for 9:	34254
+computed area offset for 10:	38447
+computed area offset for 11:	42736
+computed area offset for 12:	47128
+computed area offset for 13:	51632
+computed area offset for 14:	56256
+computed area offset for 15:	61010
+computed area offset for 16:	65906
+computed area offset for 17:	70958
+computed area offset for 18:	76181
+computed area offset for 19:	81594
+computed area offset for 20:	87220
+computed area offset for 21:	93086
+computed area offset for 22:	99225
+computed area offset for 23:	105679
+computed area offset for 24:	112503
+computed area offset for 25:	119769
+computed area offset for 26:	127575
+computed area offset for 27:	136063
+computed area offset for 28:	145452
+computed area offset for 29:	156109
+computed area offset for 30:	168751
+computed area offset for 31:	185226
+computed area offset for 32:	225000
+resulting i1: 222467	i2: 222619	d: -2147484396.953417 time: 1.225842 period: 0.028602

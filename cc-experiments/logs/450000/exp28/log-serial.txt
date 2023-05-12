@@ -1,0 +1,2 @@
+created inputs	
+computed sumW 	-1.10737e-09

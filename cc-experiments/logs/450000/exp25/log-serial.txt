@@ -1,0 +1,3 @@
+created inputs	
+computed sumW 	-1.10737e-09
+resulting i1: 255946	i2: 256774	d: 4294967.322478 time: 442.137972 period: 0.032000

@@ -1,0 +1,8 @@
+created inputs	
+computed sumW 	-7.67437e-10
+found 2 threads in the program.
+computed 3164062500 areaPerProc.
+computed area offset for 0:	0
+computed area offset for 1:	32951
+computed area offset for 2:	112500
+resulting i1: 1269	i2: 1270	d: -2147483648.000000 time: 14.057059 period: 0.032729

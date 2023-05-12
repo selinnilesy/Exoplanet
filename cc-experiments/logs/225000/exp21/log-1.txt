@@ -1,0 +1,4 @@
+created inputs	
+computed sumW 	5.89289e-10
+L1-Cache miss count: 0x7fffba4574d0
+resulting i1: 222467	i2: 222619	d: -2147484396.953417 time: 299.467420 period: 0.028602
