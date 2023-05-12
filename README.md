@@ -23,9 +23,9 @@ CC organizes experiments based on the input size, in each folder there are diffe
 # Notes:
 STAPL Solutions: \
 \
-The most basic STAPL solution can be found in commit with id : commit de2e9c2. See parallelBls.cpp and it has balanced distribution.
-Stapl balanced distribution is as slow as no distirbution specified.
-The most plain STAPL solution can be found in commit with id : commit 0d01ca3. Has no distribution specified Vectors are initialized locally but automatically distributed by STAPL runtime system. Slow due to contention.
+Working STAPL solution can be found in commit with id : commit de2e9c2. See parallelBls.cpp and it has balanced distribution. \
+Stapl balanced distribution is as slow as no distirbution specified. \
+The most plain  and working STAPL solution can be found in commit with id : commit 0d01ca3. Has no distribution specified Vectors are initialized locally but automatically distributed by STAPL runtime system. Slow due to contention.
 
 Performance Observations: 
 
@@ -35,3 +35,5 @@ STAPL version parallelBLS with 4 MPI processes take around 3.6 seconds for the s
 Stapl local vectors by using vector add is as slow due to incurred communication.
 With std::vectors however, 4 MPI processes finish 0.0006 seconds for the same mock file. The same version gives stapl runtime errors with big datafiles such as 112k.
 All these versions are committed to parallelBLS.cpp file separately.
+
+Implementing the load balance is no trivial as map functions requires wrapping local data of processes into nested vectors before distributing them. Future library implementation is the last work that is started for the sake of overlapping load communication and computation.
