@@ -1,0 +1,5 @@
+read filesize: 36000
+cleaning NaNs: 0
+cleaning 0.0s: 2
+-finished BLS with time : 4.9039213260402903
+resulting i1: 27024	i2: 35982	d: -3689464.144869912 period: 0.05184606481481480

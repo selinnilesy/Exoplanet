@@ -1,0 +1,120 @@
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 3	i2: 1754	d: 4258395.3986975709 time: 0.022475310950540006 period: 0.20776296296296293
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 33	i2: 3475	d: 3444490.6402107077 time: 0.076821697992272675 period: 0.20408888888888888
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 100	i2: 7028	d: 2055386.5823501421 time: 0.29422128503210843 period: 0.20533333333333331
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 2	i2: 871	d: 3328006.958608517 time: 0.0057172599481418729 period: 0.20645925925925923
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 3	i2: 1754	d: 4258395.3986975709 time: 0.063017886015586555 period: 0.20776296296296293
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 300	i2: 740	d: -2146101012.0247061 time: 0.23065328202210367 period: 0.02607407407407408
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 821	i2: 1210	d: -1032442083.0019809 time: 0.58451351395342499 period: 0.01152592592592593
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 2	i2: 871	d: 3328006.958608517 time: 0.015419291914440691 period: 0.20645925925925923
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 714	i2: 801	d: -8516.7697680535966 time: 0.063823436968959868 period: 0.01031111111111112
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 1110	i2: 1979	d: -2146101012.0114808 time: 0.20091813697945327 period: 0.05155555555555555
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 2633	i2: 4011	d: -565017.00407764909 time: 0.78100104606710374 period: 0.04085925925925926
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 258	i2: 273	d: -1664003879.243562 time: 0.021623036940582097 period: 0.00355555555555556
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 167	i2: 999	d: -2129200426.019582 time: 0.066784722032025456 period: 0.09872592592592593
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 2060	i2: 3100	d: -2146101012.1887941 time: 0.14306452393066138 period: 0.06162962962962962
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 5216	i2: 6679	d: -1035642776.6455585 time: 0.85652549494989216 period: 0.04337777777777777
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 184	i2: 185	d: 3328006.958608517 time: 0.032166520017199218 period: 0.00023703703703704
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 23	i2: 1065	d: -8516.7697717139072 time: 0.10353159403894097 period: 0.12361481481481480
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 1726	i2: 2506	d: -2146101012.0209863 time: 0.23182480398099869 period: 0.04628148148148149
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 149	i2: 1447	d: -1032442255.8937963 time: 0.98461869300808758 period: 0.03845925925925925
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 107	i2: 612	d: -1664003879.0043144 time: 0.025493878987617791 period: 0.12017777777777777
+- Processing file: mockcurve1757_5.0.fits
+read filesize: 1757
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 821	i2: 962	d: -2129200494.236897 time: 0.070866046939045191 period: 0.01682962962962962
+- Processing file: mockcurve3515_5.0.fits
+read filesize: 3515
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 93	i2: 3485	d: -2146218375.3614624 time: 0.25667840894311666 period: 0.20112592592592590
+- Processing file: mockcurve7031_3.0.fits
+read filesize: 7031
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 419	i2: 2941	d: -1032458097.941553 time: 0.99701212299987674 period: 0.07472592592592592
+- Processing file: mockcurve878_3.0.fits
+read filesize: 878
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 531	i2: 642	d: -1664003879.9831047 time: 0.024464115034788847 period: 0.02631111111111112

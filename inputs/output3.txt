@@ -1,0 +1,4 @@
+read filesize: 50250
+cleaning NaNs: 3541
+cleaning also 0.0s: 2
+successfully readImage() 

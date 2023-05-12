@@ -1,0 +1,4 @@
+read filesize: 14062
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 346	i2: 7699	d: -7872.36890395913269458 time: 5.25069846899714321 period: 0.10896296296296296

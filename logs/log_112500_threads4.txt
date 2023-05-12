@@ -1,0 +1,3 @@
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2

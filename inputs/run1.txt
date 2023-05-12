@@ -1,0 +1,10 @@
+Number of Lines in File: 473
+Remaining Lines in File after Cleansing: 471
+FINAL D: 0.0021186289777996334, with i1: 0 , i2: 470 
+Execution Time: 139.95390376076102 with Period: 9.665446049264574
+Number of Lines in File: 1626
+Remaining Lines in File after Cleansing: 1624
+FINAL D: 0.0006153839956840862, with i1: 0 , i2: 1623 
+Execution Time: 5584.444836348295 with Period: 33.43033912895771
+Number of Lines in File: 4075
+Remaining Lines in File after Cleansing: 4072

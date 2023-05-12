@@ -1,0 +1,7 @@
+read filesize: 1556
+cleaning NaNs: 268
+cleaning also 0.0s: 1
+successfully readImage() 
+resulting i1: 645	i2: 646	d: 0.0074391958340294653
+Period: 0.02043435625819257
+finished BLS with time : 12.49283168900000085

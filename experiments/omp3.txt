@@ -1,0 +1,30 @@
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 95273	i2: 109770	d: 4294729.2355849901 time: 73.095525869983248 period: 0.02684629629629628
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 13293	i2: 77129	d: -2147445429.8185477 time: 99.980090645956807 period: 0.11821851851851853
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 43696	i2: 50014	d: -2147882084.8288627 time: 336.85543191502802 period: 0.01170000000000000
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 78736	i2: 100954	d: -128672828059.74542 time: 127.34061506402213 period: 0.04114444444444446
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 47456	i2: 58697	d: -491853190249.0069 time: 245.60194734402467 period: 0.02081666666666666
+- Processing file: 
+read filesize: 112500
+cleaning NaNs: 0
+cleaning 0.0s: 2
+resulting i1: 66364	i2: 82587	d: -34298788156684.426 time: 184.13447460206226 period: 0.03004259259259259
