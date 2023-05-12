@@ -21,13 +21,11 @@
 #include "benchmarks/algorithms/timer.hpp"
 #include <stapl/array.hpp>
 #include <stapl/vector.hpp>
-#include <stapl/domains/indexed.hpp>
 #include <stapl/numeric.hpp>
 #include <stapl/utility/do_once.hpp>
 #include <stapl/algorithms/algorithm.hpp>
 #include <algorithm>
 #include <stapl/containers/distribution/distribution.hpp>
-#include <stapl/containers/set/set.hpp>
 #include  <stapl/runtime/counter/mpi/mpi_wtime_timer.hpp>
 
 #if defined(_OPENMP)
@@ -46,11 +44,11 @@ typedef stapl::plus<double> double_plus;
 
 typedef std::numeric_limits< double > dbl;
 const float EPSILON = 0.00000001f;
-using array_type = stapl::array< double,
-        stapl::view_based_partition<stapl::distribution_spec<>>,
-        stapl::view_based_mapper<stapl::distribution_spec<>>
-    >;
+using array_type = stapl::array< double>;
+using nested_array_type = stapl::array< std::vector<double>>;
+using nested_array_type_int = stapl::array< std::vector<int>>;
 using vector_type = stapl::vector<double>;
+using vector_type_int = stapl::vector<int>;
 
 #if SIZE_MAX == UCHAR_MAX
    #define my_MPI_SIZE_T MPI_UNSIGNED_CHAR
@@ -113,6 +111,101 @@ public:
         double sf = val1;
         double weight = val2;
         output = weight * (1.0 / sf);
+    }
+};
+struct BLS_mapfunc
+{
+public:
+    int l_size;
+    int prev_size;
+    int res_i1;
+    int res_i2;
+    double res_mind;
+    double helper_d;
+    BLS_mapfunc(int l_size, int prev_size, double helper_d) :  l_size(l_size), prev_size(prev_size), res_i1(-1), res_i2(-1), res_mind(DBL_MAX), helper_d(helper_d)
+    {}
+    using result_type = void;
+    template<typename T1, typename T2>
+    result_type operator()(T1 &&scannedWeights, T1 &&scannedWeightedFlux, T2 &&sizes)
+    {
+        double r,s, d;
+        cout.precision(dbl::max_digits10);
+        int num_loc = stapl::get_num_locations();
+        int loc_id = stapl::get_location_id();
+        int next_size=0;
+
+        if(loc_id != num_loc-1)
+        {
+            auto future_weights = scannedWeights.container().get_element_split(loc_id+1);
+            auto future_fluxedWeights = scannedWeightedFlux.container().get_element_split(loc_id+1);
+            next_size= sizes[loc_id+1];
+
+            for(size_t i1=0; i1< (size_t) l_size; i1++){
+                double reg1= scannedWeights[i1];
+                double reg2= scannedWeightedFlux[i1];
+                for(size_t i2=(i1+1); i2< (size_t) l_size; i2++){
+                    r = scannedWeights[i2] - reg1;
+                    s = scannedWeightedFlux[i2] - reg2;
+                    d = (helper_d - ( s*s)) / ( 1.0 * r *  (1.0-r) );
+                    if(d < res_mind){
+                        res_mind  = d;
+                        res_i1= prev_size + i1;
+                        res_i2= prev_size + i2;
+                    }
+                }
+            }
+
+            std::vector<double> next_weights = future_weights.get();
+            std::vector<double> next_fluxedWeights = future_fluxedWeights.get();
+
+            for(int i=loc_id+2; i<num_loc; i++){
+
+                auto future_weights = scannedWeights.container().get_element_split(i);
+                auto future_fluxedWeights = scannedWeightedFlux.container().get_element_split(i);
+
+                for(size_t i1=0; i1< (size_t) l_size; i1++){
+                    double reg1= next_weights[i1];
+                    double reg2= next_fluxedWeights[i1];
+                    for(size_t i2= 0; i2< (size_t) next_size; i2++){
+                        r = next_weights[i2] - reg1;
+                        s = next_fluxedWeights[i2] - reg2;
+                        d = (helper_d - ( s*s)) / ( 1.0 * r *  (1.0-r) );
+                        if(d < res_mind){
+                            res_mind  = d;
+                            res_i1= prev_size + i1;
+                            res_i2= prev_size + i2;
+                        }
+                    }
+                }
+                next_weights = future_weights.get();
+                next_fluxedWeights = future_fluxedWeights.get();
+                next_size =  sizes[i];
+            }
+            for(size_t i1=0; i1< (size_t) l_size; i1++){
+                double reg1= next_weights[i1];
+                double reg2= next_fluxedWeights[i1];
+                for(size_t i2=0; i2< (size_t) next_size; i2++){
+                    r = next_weights[i2] - reg1;
+                    s = next_fluxedWeights[i2] - reg2;
+                    d = (helper_d - ( s*s)) / ( 1.0 * r *  (1.0-r) );
+                    if(d < res_mind){
+                        res_mind  = d;
+                        res_i1= prev_size + i1;
+                        res_i2= prev_size + i2;
+                    }
+                }
+            }
+        }
+    }
+
+    void define_type(stapl::typer& t)
+    {
+        t.member(l_size);
+        t.member(prev_size);
+        t.member(res_i1);
+        t.member(res_i2);
+        t.member(res_mind);
+        t.member(helper_d);
     }
 };
 
@@ -281,10 +374,12 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
     size_t start = size - sqrt(num_loc - loc_id) * grid;
     size_t end = size - sqrt(num_loc - loc_id -1) * grid;
 
-    for(size_t i1=start; i1< (size_t) end; i1++){
+
+    for(size_t i1=0; i1< (size_t) end-start; i1++){
         double reg1= scannedWeights[i1];
         double reg2= scannedWeightedFlux[i1];
-        for(size_t i2=(i1+1); i2< (size_t) size; i2++){
+
+        for(size_t i2=(i1+1); i2< (size_t) end-start; i2++){
             r = scannedWeights[i2] - reg1;
             s = scannedWeightedFlux[i2] - reg2;
             d = (helper_d - ( s*s)) / ( 1.0 * r *  (1.0-r) );
@@ -295,6 +390,7 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
             }
         }
     }
+
     MPI_Reduce(&local_solution, &global_solution, 1, structtype, minop_struct, 0, MPI_COMM_WORLD);
     double measured_time = t.stop();
     MPI_Reduce(&measured_time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
@@ -378,29 +474,58 @@ void myBls( stapl::vector_view<vector_type> scannedWeights ,stapl::vector_view<v
      block_map<id_type, id_type>(block_size), distribution_type::blocked);
      */
 
-     vector_type m_scanned_weights((size));
+     /*
+     * vector_type m_scanned_weights;
      stapl::vector_view<vector_type> mv_scanned_weights(m_scanned_weights);
-     vector_type m_scanned_weightedFlux((size));
+     vector_type m_scanned_weightedFlux;
      stapl::vector_view<vector_type> mv_scanned_weightedFlux(m_scanned_weightedFlux);
-     vector_type m_vtime((size));
+     vector_type m_vtime;
      stapl::vector_view<vector_type> mv_time(m_vtime);
-
-     size_t grid= size/sqrt(num_loc);
-    size_t start = size - sqrt(num_loc - loc_id) * grid;
-    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
     for(size_t i=start; i< end; i++){
         mv_scanned_weights.add(v_scanned_weights[i]);
-        mv_scanned_weightedFlux.add(scanned_weightedFlux[i]);
+        mv_scanned_weightedFlux.add(v_scanned_weightedFlux[i]);
         mv_time.add(vtime[i]);
     }
+    mv_scanned_weights.container().distribution().synchronize_metadata();
+    mv_scanned_weightedFlux.container().distribution().synchronize_metadata();
+    mv_time.container().distribution().synchronize_metadata();
+     */
+
+
+    size_t grid= size/sqrt(num_loc);
+    size_t start = size - sqrt(num_loc - loc_id) * grid;
+    size_t end = size - sqrt(num_loc - loc_id -1) * grid;
+
+    std::vector<double> w, wf;
+    for(size_t i=start; i< end; i++){
+        w.push_back(v_scanned_weights[i]);
+        wf.push_back(v_scanned_weightedFlux[i]);
+    }
+    nested_array_type w_location_vecs(num_loc);
+    stapl::array_view<nested_array_type> v_w_location_vecs(w_location_vecs);
+    v_w_location_vecs[loc_id] = w;
+    nested_array_type wf_location_vecs(num_loc);
+    stapl::array_view<nested_array_type> v_wf_location_vecs(wf_location_vecs);
+    v_wf_location_vecs[loc_id] = wf;
+
+    std::vector<int> size_locations(num_loc);
+    size_locations[loc_id] = end-start;
+
+    nested_array_type_int size_location_vecs(num_loc);
+    stapl::array_view<nested_array_type_int> v_size_location_vecs(size_location_vecs);
+    v_size_location_vecs[loc_id] = size_locations;
+
+    int lsize = end-start;
+    int prevsize=0;
+    MPI_Exscan(&lsize, &prevsize, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    //cout << loc_id<< "'s read: mv_scanned_weights-" << mv_scanned_weights[5] << "\tmv_scanned_weightedFlux-" << mv_scanned_weightedFlux[10]  << '\n' ;
 
     cout << loc_id << ": came to barrier \t" << endl << flush;
     stapl::rmi_barrier();
     cout << loc_id << ": starting myBLS \t" << endl << flush;
-
-
-    // do once. create time, flux and flux error.
-    myBls(mv_scanned_weights, mv_scanned_weightedFlux, mv_time, helper_d,  size);
+    //myBls(mv_scanned_weights, mv_scanned_weightedFlux, mv_time, helper_d,  size);
+    stapl::map_func(BLS_mapfunc(end-start,prevsize, helper_d), v_w_location_vecs, v_wf_location_vecs, v_size_location_vecs);
 
     return EXIT_SUCCESS;
 }
